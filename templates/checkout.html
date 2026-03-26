@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}Checkout - PS5 Game Shop{% endblock %}
+
+{% block content %}
+<h1>Checkout</h1>
+
+<div class="checkout-layout">
+  <!-- Order Summary -->
+  <div class="order-summary">
+    <h2>Order Summary</h2>
+    {% for item in items %}
+    <div class="checkout-item">
+      <span>{{ item.title }} &times; {{ item.quantity }}</span>
+      <span>₹{{ item.subtotal }}</span>
+    </div>
+    {% endfor %}
+    <hr>
+    <div class="checkout-item total-row">
+      <span><strong>Total</strong></span>
+      <span><strong>₹{{ total }}</strong></span>
+    </div>
+  </div>
+
+  <!-- Payment Section -->295610
+  <div class="payment-section">
+    <h2>Choose Payment Method</h2>
+
+    <!-- Payment Method Tabs -->
+    <div class="pay-tabs">
+      <button class="pay-tab active" onclick="switchTab('card')">💳 Card</button>
+      <button class="pay-tab" onclick="switchTab('other')">📱 Other (UPI, NetBanking…)</button>
+    </div>
+
+    <!-- Card Payment Form -->
+    <div id="cardPanel" class="pay-panel active">
+      <div class="card-form">
+        <div class="input-group">
+          <label>Card Number</label>
+          <div id="cardNumberDiv" class="sdk-field"></div>
+          <span id="cardNumberError" class="field-error"></span>
+        </div>
+        <div class="input-group">
+          <label>Cardholder Name</label>
+          <div id="cardHolderNameDiv" class="sdk-field"></div>
+          <span id="cardHolderNameError" class="field-error"></span>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label>Expiry</label>
+            <div id="cardExpiryDiv" class="sdk-field"></div>
+            <span id="cardExpiryError" class="field-error"></span>
+          </div>
+          <div class="input-group">
+            <label>CVV</label>
+            <div id="cardCvvDiv" class="sdk-field"></div>
+            <span id="cardCvvError" class="field-error"></span>
+          </div>
+        </div>
+        <button id="cardPayBtn" class="btn btn-primary btn-full" onclick="initiateCardPayment()">
+          Pay ₹{{ total }} with Card
+        </button>
+      </div>
+    </div>
+
+    <!-- Other Payment (Standard Checkout) -->
+    <div id="otherPanel" class="pay-panel">
+      <div class="payment-info">
+        <p>🔒 Pay securely via <strong>PhonePe</strong> — UPI, Net Banking, Wallets & more.</p>
+      </div>
+      <button id="otherPayBtn" class="btn btn-primary btn-full" onclick="initiateOtherPayment()">
+        Pay ₹{{ total }} with PhonePe
+      </button>
+    </div>
+
+    <div id="payStatus" class="pay-status" style="display:none;"></div>
+    <a href="{{ url_for('cart') }}" class="btn btn-secondary btn-full" style="margin-top: 0.5rem;">Back to Cart</a>
+  </div>
+</div>
+
+<!-- Toggleable API Logs -->
+<div id="logsContainer">
+  {% include '_api_logs.html' %}
+</div>
+
+<!-- PhonePe Standard Checkout SDK -->
+<script src="https://mercury.phonepe.com/web/bundle/checkout.js"></script>
+<!-- PhonePe Card Checkout SDK -->
+<script type="text/javascript" src="{{ sdk_domain }}/web-sdk/v1/{{ merchant_id }}/card-checkout"></script>
+
+<script>
+/* ── Tab Switching ─────────────────────────────────────────────── */
+function switchTab(tab) {
+  document.querySelectorAll('.pay-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.pay-panel').forEach(function(p) { p.classList.remove('active'); });
+
+  if (tab === 'card') {
+    document.querySelectorAll('.pay-tab')[0].classList.add('active');
+    document.getElementById('cardPanel').classList.add('active');
+  } else {
+    document.querySelectorAll('.pay-tab')[1].classList.add('active');
+    document.getElementById('otherPanel').classList.add('active');
+  }
+  document.getElementById('payStatus').style.display = 'none';
+}
+
+/* ── Log Renderer ──────────────────────────────────────────────── */
+function renderLogs(logs) {
+  if (!logs || logs.length === 0) {
+    document.getElementById('logsContainer').innerHTML = '';
+    return;
+  }
+  var html = '<div class="api-logs-section">';
+  html += '<button class="btn btn-secondary btn-full toggle-logs-btn" onclick="document.getElementById(\'apiLogs\').classList.toggle(\'hidden\')">';
+  html += '📋 Toggle API Logs (' + logs.length + ' call' + (logs.length !== 1 ? 's' : '') + ')</button>';
+  html += '<div id="apiLogs">';
+  logs.forEach(function(log) {
+    html += '<div class="log-card"><div class="log-header"><span class="log-step">' + log.step + '</span>';
+    html += '<span class="log-time">' + log.timestamp + '</span></div>';
+    html += '<div class="log-section"><h3>📤 Request</h3>';
+    html += '<div class="log-meta"><span class="log-method">' + log.request.method + '</span>';
+    html += '<code class="log-url">' + log.request.url + '</code></div>';
+    html += '<details><summary>Headers</summary><pre>' + JSON.stringify(log.request.headers, null, 2) + '</pre></details>';
+    if (log.request.body) {
+      html += '<details><summary>Body</summary><pre>' + JSON.stringify(log.request.body, null, 2) + '</pre></details>';
+    }
+    html += '</div>';
+    var sc = log.response.status_code === 200 ? 'status-ok' : 'status-err';
+    html += '<div class="log-section"><h3>📥 Response <span class="status-badge ' + sc + '">' + log.response.status_code + '</span></h3>';
+    html += '<details><summary>Headers</summary><pre>' + JSON.stringify(log.response.headers, null, 2) + '</pre></details>';
+    html += '<details open><summary>Body</summary><pre>' + JSON.stringify(log.response.body, null, 2) + '</pre></details>';
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  document.getElementById('logsContainer').innerHTML = html;
+}
+
+function showStatus(msg, type) {
+  var s = document.getElementById('payStatus');
+  s.style.display = 'block';
+  s.className = 'pay-status alert alert-' + type;
+  s.textContent = msg;
+}
+
+/* ── Card Payment (JS Checkout SDK) ───────────────────────────── */
+var sdkReady = false;
+
+function initCardSdk() {
+  try {
+    if (window.PhonepeWidget) {
+      var inputStyles = {
+        outline: 'none',
+        border: '1px solid #3f3f46',
+        padding: '8px 16px',
+        height: '42px',
+        background: '#ffffff',
+        color: '#111111',
+        fontSize: '14px',
+        borderRadius: '8px',
+        width: '100%',
+        boxSizing: 'border-box',
+      };
+      window.PhonepeWidget.init({
+        layoutConfig: {
+          formId: 'cardForm',
+          styles: { input: inputStyles },
+          iframeContainers: {
+            cardNumber:     { container: '#cardNumberDiv',     attributes: { placeholder: 'Card Number' } },
+            cardHolderName: { container: '#cardHolderNameDiv', attributes: { placeholder: 'Name on Card' } },
+            cardExpiry:     { container: '#cardExpiryDiv',     attributes: { placeholder: 'MM / YY' } },
+            cardCvv:        { container: '#cardCvvDiv',        attributes: { placeholder: 'CVV' } },
+          },
+        },
+        callback: function(eventData) {
+          console.log('Card SDK event:', eventData);
+          // Validation errors from pay() come here
+          if (eventData && eventData.currentElement) {
+            var errMap = {
+              cardNumber: 'cardNumberError',
+              cardHolderName: 'cardHolderNameError',
+              cardExpiry: 'cardExpiryError',
+              cardCvv: 'cardCvvError'
+            };
+            // Clear all previous errors
+            Object.values(errMap).forEach(function(id) {
+              document.getElementById(id).textContent = '';
+            });
+            // Show error on the invalid field
+            var errEl = document.getElementById(errMap[eventData.currentElement]);
+            if (errEl && eventData.error) {
+              errEl.textContent = eventData.error;
+            }
+            // Re-enable pay button
+            var btn = document.getElementById('cardPayBtn');
+            btn.disabled = false;
+            btn.textContent = 'Pay ₹{{ total }} with Card';
+          }
+        }
+      });
+      sdkReady = true;
+      console.log('Card SDK initialized successfully');
+    } else {
+      console.warn('PhonepeWidget not available yet');
+    }
+  } catch(e) {
+    console.warn('Card SDK init failed:', e);
+    document.getElementById('cardPanel').innerHTML =
+      '<div class="alert alert-error">Card SDK failed to load: ' + e.message + '</div>';
+  }
+}
+
+// Try init on load, and also with a retry fallback
+window.addEventListener('load', function() {
+  if (window.PhonepeWidget) {
+    initCardSdk();
+  } else {
+    setTimeout(initCardSdk, 1500);
+    setTimeout(function() { if (!sdkReady) initCardSdk(); }, 3000);
+  }
+});
+
+function initiateCardPayment() {
+  var btn = document.getElementById('cardPayBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating order…';
+  document.getElementById('payStatus').style.display = 'none';
+
+  fetch('{{ url_for("create_order_token_api") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    renderLogs(data.logs || []);
+
+    if (data.error) {
+      btn.disabled = false;
+      btn.textContent = 'Pay ₹{{ total }} with Card';
+      showStatus(data.error, 'error');
+      return;
+    }
+
+    btn.textContent = 'Processing…';
+    var merchantOrderId = data.merchantOrderId;
+
+    if (!sdkReady || !window.PhonepeWidget) {
+      showStatus('Card SDK not loaded. Please refresh the page.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Pay ₹{{ total }} with Card';
+      return;
+    }
+
+    window.PhonepeWidget.pay({
+      transactionToken: data.transactionToken,
+      callback: function(response) {
+        console.log('Card pay response:', response);
+
+        // Log the SDK pay response alongside server logs
+        var sdkLog = {
+          step: '3. Card Pay (SDK → PhonePe)',
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
+          request: {
+            method: 'POST',
+            url: 'PhonepeWidget.pay() — SDK internal call via sandboxed iframe',
+            headers: { 'Authorization': 'Bearer <token> (set by SDK internally)' },
+            body: { note: 'Card data collected securely by SDK iframes' }
+          },
+          response: {
+            status_code: response.statusCode ? parseInt(response.statusCode) : 200,
+            headers: {},
+            body: response
+          }
+        };
+        var currentLogs = (data.logs || []).concat([sdkLog]);
+        renderLogs(currentLogs);
+
+        // Error response (validation or API error)
+        if (response.statusCode || response.errorCode) {
+          showStatus('❌ Payment error: ' + (response.message || response.errorCode || 'Unknown error'), 'error');
+          btn.disabled = false;
+          btn.textContent = 'Pay ₹{{ total }} with Card';
+          return;
+        }
+
+        if (response.redirectUrl) {
+          // 3DS redirect
+          window.location.href = response.redirectUrl;
+          return;
+        }
+
+        // Terminal state — check status
+        btn.textContent = 'Checking status…';
+        fetch('/api/payment-status/' + merchantOrderId)
+          .then(function(r) { return r.json(); })
+          .then(function(statusData) {
+            renderLogs(currentLogs.concat(statusData.logs || []));
+            if (statusData.state === 'COMPLETED') {
+              showStatus('✅ Payment successful! Order ' + merchantOrderId + ' confirmed.', 'success');
+              btn.style.display = 'none';
+            } else if (statusData.state === 'PENDING') {
+              showStatus('⏳ Payment pending for order ' + merchantOrderId + '.', 'info');
+              btn.disabled = false;
+              btn.textContent = 'Pay ₹{{ total }} with Card';
+            } else {
+              showStatus('❌ Payment failed. State: ' + statusData.state, 'error');
+              btn.disabled = false;
+              btn.textContent = 'Pay ₹{{ total }} with Card';
+            }
+          });
+      }
+    });
+  })
+  .catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Pay ₹{{ total }} with Card';
+    showStatus('Network error: ' + err.message, 'error');
+  });
+}
+
+/* ── Other Payment (Standard Checkout) ────────────────────────── */
+function initiateOtherPayment() {
+  var btn = document.getElementById('otherPayBtn');
+  btn.disabled = true;
+  btn.textContent = 'Initiating payment…';
+  document.getElementById('payStatus').style.display = 'none';
+
+  fetch('{{ url_for("initiate_payment_api") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    renderLogs(data.logs || []);
+
+    if (data.error) {
+      btn.disabled = false;
+      btn.textContent = 'Pay ₹{{ total }} with PhonePe';
+      showStatus(data.error, 'error');
+      return;
+    }
+
+    btn.textContent = 'Payment page loading…';
+    var merchantOrderId = data.merchantOrderId;
+
+    window.PhonePeCheckout.transact({
+      tokenUrl: data.tokenUrl,
+      type: 'IFRAME',
+      callback: function(response) {
+        if (response === 'USER_CANCEL') {
+          showStatus('Payment was cancelled.', 'info');
+          btn.disabled = false;
+          btn.textContent = 'Pay ₹{{ total }} with PhonePe';
+          return;
+        }
+        btn.textContent = 'Checking status…';
+        fetch('/api/payment-status/' + merchantOrderId)
+          .then(function(r) { return r.json(); })
+          .then(function(statusData) {
+            renderLogs(statusData.logs || []);
+            if (statusData.state === 'COMPLETED') {
+              showStatus('✅ Payment successful! Order ' + merchantOrderId + ' confirmed.', 'success');
+              btn.style.display = 'none';
+            } else if (statusData.state === 'PENDING') {
+              showStatus('⏳ Payment pending for order ' + merchantOrderId + '.', 'info');
+              btn.disabled = false;
+              btn.textContent = 'Pay ₹{{ total }} with PhonePe';
+            } else {
+              showStatus('❌ Payment failed. State: ' + statusData.state, 'error');
+              btn.disabled = false;
+              btn.textContent = 'Pay ₹{{ total }} with PhonePe';
+            }
+          });
+      }
+    });
+  })
+  .catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Pay ₹{{ total }} with PhonePe';
+    showStatus('Network error: ' + err.message, 'error');
+  });
+}
+</script>
+{% endblock %}

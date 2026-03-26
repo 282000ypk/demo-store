@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Order Result - PS5 Game Shop{% endblock %}
+
+{% block content %}
+<h1>Order Result</h1>
+
+<div class="order-result-actions">
+  <a href="{{ url_for('shop') }}" class="btn btn-primary">Back to Shop</a>
+</div>
+
+<!-- Toggleable API Logs -->
+{% include '_api_logs.html' %}
+{% endblock %}

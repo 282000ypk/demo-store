@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="origin">
+  <title>{% block title %}PS5 Game Shop{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="{{ url_for('shop') }}" class="logo">🎮 PS5 Game Shop</a>
+    <div class="nav-links">
+      <a href="{{ url_for('shop') }}">Shop</a>
+      <a href="{{ url_for('api_logs') }}">📋 API Logs</a>
+      <a href="{{ url_for('cart') }}" class="cart-link">🛒 Cart
+        {% if cart_count %}<span class="badge">{{ cart_count }}</span>{% endif %}
+      </a>
+    </div>
+  </nav>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 PS5 Game Shop. All rights reserved.</p>
+  </footer>
+</body>
+</html>
