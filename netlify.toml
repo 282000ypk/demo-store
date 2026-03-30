@@ -1,12 +1,6 @@
 [build]
-  publish = "static"
-  functions = "netlify/functions"
+  command = "npm run build"
+  publish = ".next"
 
-[build.environment]
-  PYTHON_VERSION = "3.10"
-
-# Forward all requests to the Flask serverless function
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/api"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
